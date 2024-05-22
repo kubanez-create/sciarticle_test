@@ -16,15 +16,26 @@ router = RabbitRouter("amqp://guest:guest@localhost:5672/")
 
 class User(BaseModel):
     id: int
+    username: str
     token: str
+    room_id: int
 
 USERS = {
-    "some_token_here": User(id=1, token="some_token_here"),
-    "some_other_token": User(id=2, token="some_other_token")
+    "some_token_here": User(
+        id=1,
+        username="u1",
+        token="some_token_here",
+        room_id=1
+    ),
+    "some_other_token": User(
+        id=2,
+        username="u2",
+        token="some_other_token",
+        room_id=1
+    )
 }
 
 async def get_user_by_token(
-    websocket: WebSocket,
     token: Annotated[str | None, Query()] = None,
 ) -> User | None:
     if token is None:
@@ -52,10 +63,12 @@ async def post_message(logger: Logger, message: str) -> dict[str, str]:
 async def get_updates(
       websocket: WebSocket,
       message: str,
+      room_id: int,
       # Объект получить по токену
       user: Annotated[User, Depends(get_user_by_token)],
-    ):
+) -> None:
     await websocket.accept()
     while True:
         data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+        await websocket.send_text(f"Received text was: {message}")
+        await websocket.send_text(f"Text got through websocket: {data}")

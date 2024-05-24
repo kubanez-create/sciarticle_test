@@ -1,3 +1,4 @@
 venv/
 .trunk/
 .vscode/
+__pycache__/

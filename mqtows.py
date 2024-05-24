@@ -1,6 +1,6 @@
 from typing import Annotated, Union
 
-from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketException, status
+from fastapi import Depends, FastAPI, Query, WebSocket, WebSocketDisconnect, WebSocketException, status
 from faststream.rabbit.fastapi import Logger, RabbitRouter
 from pydantic import BaseModel
 
@@ -23,6 +23,7 @@ USERS = {
     "some_other_token": User(id=2, username="u2", token="some_other_token", room_id=1),
 }
 
+message_storage = set()
 
 async def get_user_by_token(
     token: Annotated[str | None, Query()] = None,
@@ -39,15 +40,21 @@ async def post_message():
     return {"message": "Message produced"}
 
 @router.subscriber("test")
+async def consume(msg: Message, logger: Logger):
+    message_storage.add(msg.content)
+    logger.info(f"Got a message via rabbitmq: {msg.content}")
+    return msg
+
 @app.websocket("/updates/{room_id}")
 async def get_updates(
     websocket: WebSocket,
     # Объект получить по токену
     user: Annotated[User, Depends(get_user_by_token)],
     room_id: Union[int, None] = None,
-    msg: Union[Message, None] = None,
 ) -> None:
     await websocket.accept()
-    while True:
-        if user and msg and user.room_id == room_id:
-            await websocket.send_text(msg.content)
+    try:
+        while message_storage and user and user.room_id == room_id:
+            await websocket.send_text(message_storage.pop())
+    except WebSocketDisconnect:
+        print("Client disconnected")
